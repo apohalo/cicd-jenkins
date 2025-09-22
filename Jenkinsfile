@@ -16,7 +16,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: "${env.BRANCH_NAME}", 
-                    url: 'git@github.com:apohalo/cicd-jenkins.git', 
+                    url: 'https://github.com/apohalo/cicd-jenkins.git', 
                     credentialsId: 'github-ssh-creds'
             }
         }
