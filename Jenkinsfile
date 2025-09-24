@@ -2,25 +2,17 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node'   
+        nodejs 'node'
     }
 
     environment {
         // Branch-based settings
-        APP_NAME = "${env.BRANCH_NAME == 'main' ? 'nodemain' : 'nodedev'}"
-        APP_PORT = "${env.BRANCH_NAME == 'main' ? '3000' : '3001'}"
-        DOCKER_IMAGE = "${APP_NAME}:v1.0"
+        APP_NAME     = "${env.BRANCH_NAME == 'main' ? 'nodemain' : 'nodedev'}"
+        APP_PORT     = "${env.BRANCH_NAME == 'main' ? '3000' : '3001'}"
+        DOCKER_IMAGE = "aigulsadykova/${APP_NAME}:v1.0"
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: "${env.BRANCH_NAME}", 
-                    url: 'https://github.com/apohalo/cicd-jenkins.git', 
-                    credentialsId: 'github-ssh-creds'
-            }
-        }
-
         stage('Build') {
             steps {
                 sh 'npm install'
@@ -33,24 +25,39 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build & Push Docker Image') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE} ."
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub') {
+                        def app = docker.build("${DOCKER_IMAGE}")
+                        app.push()
+                    }
+                }
             }
         }
 
-        stage('Deploy') {
+        stage('Scan with Trivy') {
+            steps {
+                sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}"
+                sh "trivy image --exit-code 1 --severity CRITICAL ${DOCKER_IMAGE}"
+            }
+        }
+
+        stage('Trigger Deploy Pipeline') {
             steps {
                 script {
-                    // Stop and remove previous containers with same name
-                    sh """
-                        docker ps -q --filter name=${APP_NAME} | xargs -r docker stop
-                        docker ps -aq --filter name=${APP_NAME} | xargs -r docker rm
-                    """
-                    // Run new container
-                    sh "docker run -d --name ${APP_NAME} --expose ${APP_PORT} -p ${APP_PORT}:3000 ${DOCKER_IMAGE}"
+                    if (env.BRANCH_NAME == 'main') {
+                        build job: 'Deploy_to_main'
+                    } else if (env.BRANCH_NAME == 'dev') {
+                        build job: 'Deploy_to_dev'
+                    }
                 }
             }
         }
     }
+}
+
+      echo "Pipeline finished for ${env.BRANCH_NAME}"
+    }
+  }
 }
