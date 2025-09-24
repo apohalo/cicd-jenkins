@@ -56,8 +56,3 @@ pipeline {
         }
     }
 }
-
-      echo "Pipeline finished for ${env.BRANCH_NAME}"
-    }
-  }
-}
